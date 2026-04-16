@@ -1,9 +1,13 @@
+from typing import Any
+
 import duckdb
 import math
 import random
 from datetime import datetime
 
 import pandas as pd
+from PyQt6.QtWidgets import QTableWidgetItem, QPushButton
+from sympy import false
 
 
 class Database:
@@ -17,7 +21,7 @@ class Database:
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS firms (
             id INTEGER,
-            name TEXT
+            name TEXT UNIQUE
         )
         """)
 
@@ -51,16 +55,31 @@ class Database:
         """)
 
         self.conn.execute("""
-        CREATE TABLE IF NOT EXISTS results (
+        CREATE TABLE IF NOT EXISTS base_results (
             id INTEGER,
-            entry_id INTEGER,
             check_id INTEGER,
             account_id INTEGER,
+            PM DOUBLE,
+            n DOUBLE,
+            h DOUBLE,
+            high_value_sum DOUBLE,
+            mus_sum DOUBLE,
+            test_sum DOUBLE,
+            coverage DOUBLE,
+            messages TEXT,
+            total DOUBLE,
+            created_at TIMESTAMP
+        )
+        """)
+
+        self.conn.execute("""
+        CREATE TABLE IF NOT EXISTS results (
+            id INTEGER,
+            base_results_id INTEGER,
             doc_id TEXT,
             date TEXT,
             amount DOUBLE,
-            selection_type TEXT,
-            created_at TIMESTAMP
+            selection_type TEXT
         )
         """)
 
@@ -68,19 +87,41 @@ class Database:
     # УДАЛЕНИЕ ДАННЫХ ПО СЧЁТУ
     # ---------------------------
     def clear_account_data(self, account_id: int):
-        # сначала удаляем results (через entries)
-        self.conn.execute(f"""
-        DELETE FROM results
-        WHERE entry_id IN (
-            SELECT id FROM entries WHERE account_id = {account_id}
-        )
-        """)
 
-        # потом сами entries
-        self.conn.execute(f"""
-        DELETE FROM entries
-        WHERE account_id = {account_id}
-        """)
+        # -------------------------
+        # 1. найти base_results_id
+        # -------------------------
+        base_ids = self.conn.execute("""
+            SELECT id FROM base_results
+            WHERE account_id = ?
+        """, [account_id]).fetchall()
+
+        base_ids = [row[0] for row in base_ids]
+
+        # -------------------------
+        # 2. удалить results
+        # -------------------------
+        if base_ids:
+            self.conn.execute(f"""
+                DELETE FROM results
+                WHERE base_results_id IN ({','.join(map(str, base_ids))})
+            """)
+
+        # -------------------------
+        # 3. удалить base_results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM base_results
+            WHERE account_id = ?
+        """, [account_id])
+
+        # -------------------------
+        # 4. удалить entries
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM entries
+            WHERE account_id = ?
+        """, [account_id])
 
     # ---------------------------
     # ПОЛУЧЕНИЕ СЫРЫХ ДАННЫХ
@@ -134,35 +175,101 @@ class Database:
         ORDER BY e.amount DESC
         """).df()
 
-
-
-    def get_or_create_firm(self, name: str) -> int:
+    def get_or_create_firm(self, name: str):
         existing = self.conn.execute("""
             SELECT id FROM firms WHERE name = ?
         """, [name]).fetchone()
 
         if existing:
-            return existing[0]
+            return existing[0], False  # False = уже была
 
-        return self.add_firm(name)
+        new_id = self.next_id("firms")
 
+        self.conn.execute("""
+            INSERT INTO firms (id, name)
+            VALUES (?, ?)
+        """, [new_id, name])
 
+        return new_id, True
 
-    def get_or_create_account(self, check_id: int, name: str) -> int:
+    def get_or_create_account(self, check_id: int, name: str) -> tuple[Any, bool] | tuple[int, bool]:
         existing = self.conn.execute("""
             SELECT id FROM accounts 
             WHERE check_id = ? AND name = ?
         """, [check_id, name]).fetchone()
 
         if existing:
-            return existing[0]
+            return existing[0], False
 
-        return self.add_account(check_id, name)
+        new_id = self.next_id("accounts")
+
+        self.conn.execute("""
+                    INSERT INTO accounts (id, check_id, name)
+                    VALUES (?, ?, ?)
+                """, [new_id, check_id, name])
+
+        self.conn.commit()
+
+        return new_id, True
+
+
+    def get_firm(self, id: int):
+        row = self.conn.execute("""
+            SELECT name FROM firms WHERE id = ?
+        """, [id]).fetchone()
+
+        if not row:
+            return None
+
+        return {"id": id, "name": row[0]}
+
+    def update_firm(self, id: int, new_name: str):
+        existing = self.conn.execute("""
+            SELECT id FROM firms
+            WHERE name = ? AND id != ?
+        """, [new_name, id]).fetchone()
+
+        if existing:
+            return False, "duplicate"
+
+        self.conn.execute("""
+            UPDATE firms
+            SET name = ?
+            WHERE id = ?
+        """, [new_name, id])
+
+        self.conn.commit()
+
+        return True, None
+
+    def update_check(self, id: int, period: str, materiality: float) -> int:
+
+        self.conn.execute("""
+            UPDATE checks
+            SET period = ?, 
+                materiality = ?, 
+                created_at = ?
+            WHERE id = ?
+        """, [period, materiality, datetime.now(), id])
+
+        return True
+
+    def update_acc(self, id: int, name: str) -> int:
+
+        self.conn.execute("""
+            UPDATE accounts
+            SET name = ?
+            WHERE id = ?
+        """, [name, id])
+
+        return True
+
+
 
     def get_firms(self):
         return self.conn.execute("""
             SELECT id, name FROM firms ORDER BY name
-        """).df()
+        """).fetchall()
 
     def search_firms(self, query: str):
         return self.conn.execute("""
@@ -170,7 +277,7 @@ class Database:
             FROM firms
             WHERE LOWER(TRIM(name)) LIKE LOWER(TRIM(?))
             ORDER BY name
-        """, [f"%{query}%"]).df()
+        """, [f"%{query}%"]).fetchall()
 
     def get_checks(self, firm_id: int):
         return self.conn.execute("""
@@ -178,7 +285,14 @@ class Database:
             FROM checks
             WHERE firm_id = ?
             ORDER BY created_at DESC
-        """, [firm_id]).df()
+        """, [firm_id]).fetchall()
+
+    def get_one_checks(self, checks_id: int):
+        return self.conn.execute("""
+            SELECT id, period, materiality, created_at
+            FROM checks
+            WHERE id = ?
+        """,[checks_id]).df()
 
     def get_accounts(self, check_id: int):
         return self.conn.execute("""
@@ -186,7 +300,7 @@ class Database:
             FROM accounts
             WHERE check_id = ?
             ORDER BY name
-        """, [check_id]).df()
+        """, [check_id]).fetchall()
 
     def get_accounts_byid(self, account_id: int):
         return self.conn.execute("""
@@ -226,15 +340,7 @@ class Database:
 
         return new_id
 
-    def add_account(self, check_id: int, name: str) -> int:
-        new_id = self.next_id("accounts")
 
-        self.conn.execute("""
-            INSERT INTO accounts (id, check_id, name)
-            VALUES (?, ?, ?)
-        """, [new_id, check_id, name])
-
-        return new_id
 
     def insert_entries(self, account_id: int, df):
         self.clear_account_data(account_id)
@@ -362,38 +468,62 @@ class Database:
         # 8. Очистка старых результатов
         # -------------------------
         self.conn.execute("""
-            DELETE FROM results
-            WHERE check_id = ? AND account_id = ?
+        DELETE FROM base_results
+        WHERE check_id = ? AND account_id = ?
         """, [check_id, account_id])
 
         # -------------------------
         # 9. Запись в БД
         # -------------------------
         now = datetime.now()
+        base_id = self.next_id("base_results")
+
+        self.conn.execute("""
+        INSERT INTO base_results (
+            id,  check_id, account_id,
+            PM, n, h,
+            high_value_sum, mus_sum, test_sum, coverage,
+            messages, total,created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            base_id,
+            check_id,
+            account_id,
+            PM,
+            n,
+            h,
+            high_value_sum,
+            mus_sum,
+            test_sum,
+            coverage,
+            " | ".join(messages),
+            total,
+            now
+        ])
+
         start_id = self.next_id("results")
 
         rows = []
         for i, (_, row) in enumerate(sample_df.iterrows()):
             rows.append((
                 start_id + i,
-                int(row["id"]),
-                check_id,
-                account_id,
+                base_id,
                 str(row["doc_id"]),
                 str(row["date"]),
                 float(row["amount"]),
-                row["selection_type"],
-                now
+                row["selection_type"]
             ))
 
         self.conn.executemany("""
-            INSERT INTO results (
-                id, entry_id, check_id, account_id,
-                doc_id, date, amount,
-                selection_type, created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO results (
+            id, base_results_id,
+            doc_id, date, amount,
+            selection_type
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
         """, rows)
+
 
         name_acc = self.get_accounts_byid(account_id)
 
@@ -401,7 +531,8 @@ class Database:
         # 10. Возврат
         # -------------------------
         return {
-            "name_acc":name_acc['name'],
+            "base_id": base_id,
+            "name_acc": name_acc['name'],
             "PM": PM,
             "n": n,
             "h": h,
@@ -410,6 +541,195 @@ class Database:
             "mus_sum": mus_sum,
             "test_sum": test_sum,
             "coverage": coverage,
-            "messages": messages,
-            "sample": sample_df
+            "messages": messages
         }
+
+    def delete_firm(self, firm_id: int):
+
+        # -------------------------
+        # 1. results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM results
+            WHERE base_results_id IN (
+                SELECT id FROM base_results
+                WHERE account_id IN (
+                    SELECT id FROM accounts
+                    WHERE check_id IN (
+                        SELECT id FROM checks WHERE firm_id = ?
+                    )
+                )
+            )
+        """, [firm_id])
+
+        # -------------------------
+        # 2. base_results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM base_results
+            WHERE account_id IN (
+                SELECT id FROM accounts
+                WHERE check_id IN (
+                    SELECT id FROM checks WHERE firm_id = ?
+                )
+            )
+        """, [firm_id])
+
+        # -------------------------
+        # 3. entries
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM entries
+            WHERE account_id IN (
+                SELECT id FROM accounts
+                WHERE check_id IN (
+                    SELECT id FROM checks WHERE firm_id = ?
+                )
+            )
+        """, [firm_id])
+
+        # -------------------------
+        # 4. accounts
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM accounts
+            WHERE check_id IN (
+                SELECT id FROM checks WHERE firm_id = ?
+            )
+        """, [firm_id])
+
+        # -------------------------
+        # 5. checks
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM checks
+            WHERE firm_id = ?
+        """, [firm_id])
+
+        # -------------------------
+        # 6. firms
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM firms
+            WHERE id = ?
+        """, [firm_id])
+
+        # -------------------------
+        # 7. фиксация
+        # -------------------------
+        self.conn.commit()
+
+
+    def delete_checks(self, check_id: int):
+
+        # -------------------------
+        # 1. results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM results
+            WHERE base_results_id IN (
+                SELECT id FROM base_results
+                WHERE account_id IN (
+                    SELECT id FROM accounts
+                    WHERE check_id = ?
+                )
+            )
+        """, [check_id])
+
+        # -------------------------
+        # 2. base_results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM base_results
+            WHERE account_id IN (
+                SELECT id FROM accounts
+                WHERE check_id = ?
+            )
+        """, [check_id])
+
+        # -------------------------
+        # 3. entries
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM entries
+            WHERE account_id IN (
+                SELECT id FROM accounts
+                WHERE check_id = ?
+            )
+        """, [check_id])
+
+        # -------------------------
+        # 4. accounts
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM accounts
+            WHERE check_id = ?
+        """, [check_id])
+
+        # -------------------------
+        # 5. checks
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM checks
+            WHERE id = ?
+        """, [check_id])
+
+
+        # -------------------------
+        # 7. фиксация
+        # -------------------------
+        self.conn.commit()
+
+
+    def delete_accounts(self, account_id: int):
+
+        # -------------------------
+        # 1. results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM results
+            WHERE base_results_id IN (
+                SELECT id FROM base_results
+                WHERE account_id IN (
+                    SELECT id FROM accounts
+                    WHERE id = ?
+                )
+            )
+        """, [account_id])
+
+        # -------------------------
+        # 2. base_results
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM base_results
+            WHERE account_id IN (
+                SELECT id FROM accounts
+                WHERE id = ?
+            )
+        """, [account_id])
+
+        # -------------------------
+        # 3. entries
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM entries
+            WHERE account_id IN (
+                SELECT id FROM accounts
+                WHERE id = ?
+            )
+        """, [account_id])
+
+        # -------------------------
+        # 4. accounts
+        # -------------------------
+        self.conn.execute("""
+            DELETE FROM accounts
+            WHERE id = ?
+        """, [account_id])
+
+
+        # -------------------------
+        # 7. фиксация
+        # -------------------------
+        self.conn.commit()
+

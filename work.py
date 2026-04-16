@@ -12,7 +12,7 @@ firm_id = db.get_or_create_firm("ООО Ромашка")
 
 # создаём проверку
 check_id = db.add_check(
-    firm_id=firm_id,
+    firm_id=firm_id[0],
     period="2024 год",
     materiality=100000
 )
