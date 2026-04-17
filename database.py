@@ -79,6 +79,7 @@ class Database:
             doc_id TEXT,
             date TEXT,
             amount DOUBLE,
+            note TEXT,
             selection_type TEXT
         )
         """)
@@ -123,16 +124,7 @@ class Database:
             WHERE account_id = ?
         """, [account_id])
 
-    # ---------------------------
-    # ПОЛУЧЕНИЕ СЫРЫХ ДАННЫХ
-    # ---------------------------
-    def get_entries(self, account_id: int):
-        return self.conn.execute(f"""
-        SELECT *
-        FROM entries
-        WHERE account_id = {account_id}
-        ORDER BY amount
-        """).df()
+
 
     # ---------------------------
     # СОХРАНЕНИЕ РЕЗУЛЬТАТОВ
@@ -161,19 +153,51 @@ class Database:
     # ПОЛУЧЕНИЕ ВЫБОРКИ
     # ---------------------------
     def get_results(self, account_id: int):
-        return self.conn.execute(f"""
-        SELECT 
-            e.id,
-            e.doc_id,
-            e.date,
-            e.amount,
-            e.note,
-            r.selection_type
-        FROM results r
-        JOIN entries e ON r.entry_id = e.id
-        WHERE e.account_id = {account_id}
-        ORDER BY e.amount DESC
-        """).df()
+
+        # 1. берём последний расчет
+        base = self.conn.execute("""
+            SELECT *
+            FROM base_results
+            WHERE account_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, [account_id]).fetchone()
+
+        if not base:
+            return None
+
+        # превращаем в dict (удобно для GUI)
+        columns = [desc[0] for desc in self.conn.description]
+        base_dict = dict(zip(columns, base))
+
+        base_id = base_dict["id"]
+
+        # 2. получаем выборку
+        sample_df = self.conn.execute("""
+            SELECT 
+                doc_id,
+                date,
+                note,
+                amount,
+                selection_type
+            FROM results
+            WHERE base_results_id = ?
+            ORDER BY amount DESC
+        """, [base_id]).df()
+
+        # 3. возвращаем всё вместе
+        return {
+            "PM": base_dict["PM"],
+            "n": base_dict["n"],
+            "h": base_dict["h"],
+            "coverage": base_dict["coverage"],
+            "total": base_dict["total"],
+            "high_value_sum": base_dict["high_value_sum"],
+            "mus_sum": base_dict["mus_sum"],
+            "test_sum": base_dict["test_sum"],
+            "messages": base_dict["messages"],
+            "sample": sample_df
+        }
 
     def get_or_create_firm(self, name: str):
         existing = self.conn.execute("""
@@ -302,6 +326,17 @@ class Database:
             ORDER BY name
         """, [check_id]).fetchall()
 
+    # ---------------------------
+    # ПОЛУЧЕНИЕ СЫРЫХ ДАННЫХ
+    # ---------------------------
+    def get_entries(self, account_id: int):
+        return self.conn.execute(f"""
+        SELECT *
+        FROM entries
+        WHERE account_id = {account_id}
+        ORDER BY amount
+        """).fetchall()
+
     def get_accounts_byid(self, account_id: int):
         return self.conn.execute("""
             SELECT id, name
@@ -408,7 +443,7 @@ class Database:
         # 5. FALLBACK
         # -------------------------
         if total <= PM:
-            messages.append("⚠ Совокупность < PM → случайная выборка")
+            messages.append("⚠ Совокупность < PM → случайная выборка. Показатели не имеют значения")
 
             sample_df = df.sample(n=min(5, len(df)))
             sample_df["selection_type"] = "RANDOM"
@@ -511,6 +546,7 @@ class Database:
                 base_id,
                 str(row["doc_id"]),
                 str(row["date"]),
+                str(row.get("note", "")),  # 👈 ВАЖНО
                 float(row["amount"]),
                 row["selection_type"]
             ))
@@ -518,10 +554,10 @@ class Database:
         self.conn.executemany("""
         INSERT INTO results (
             id, base_results_id,
-            doc_id, date, amount,
+            doc_id, date, note, amount,
             selection_type
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """, rows)
 
 
@@ -543,6 +579,32 @@ class Database:
             "coverage": coverage,
             "messages": messages
         }
+
+    def clear_results(self, account_id: int):
+
+        base_ids = self.conn.execute("""
+            SELECT id
+            FROM base_results
+            WHERE account_id = ?
+        """, [account_id]).fetchall()
+
+        base_ids = [row[0] for row in base_ids]
+
+        if not base_ids:
+            return
+
+        # DELETE results
+        for bid in base_ids:
+            self.conn.execute("""
+                DELETE FROM results
+                WHERE base_results_id = ?
+            """, [bid])
+
+        # DELETE base_results
+        self.conn.execute("""
+            DELETE FROM base_results
+            WHERE account_id = ?
+        """, [account_id])
 
     def delete_firm(self, firm_id: int):
 
