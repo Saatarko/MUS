@@ -1,30 +1,104 @@
 import sys
+
+import numpy as np
 from PyQt6 import uic
 from datetime import datetime
 from PyQt6.QtCore import QSize, pyqtSignal, QTimer
-from PyQt6.QtGui import QIcon, QColor
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QTableWidgetItem, QStyle, QMessageBox, QTableWidget, QFileDialog
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout,
     QPushButton, QLabel
 )
+from PyQt6.QtGui import QColor, QBrush
 
 from Parser.parser import parse_1c_table, pre_parser
 from database import Database
 import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+
+import qdarkstyle
+
+
 
 style = QApplication.style()
+LAST_WINDOW_POS = None
 
-class MainWindow(QMainWindow):
+def center_window(window):
+    global LAST_WINDOW_POS
+
+    geo = window.frameGeometry()
+
+    if LAST_WINDOW_POS:
+        # 👉 двигаем центр окна в сохранённую точку
+        geo.moveCenter(LAST_WINDOW_POS)
+        window.move(geo.topLeft())
+        return
+
+    # 👉 стандартный центр экрана
+    screen = window.screen()
+    screen_geometry = screen.availableGeometry()
+
+    geo.moveCenter(screen_geometry.center())
+    window.move(geo.topLeft())
+
+class BaseWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self._first_show = True
+
+    def showEvent(self, event):
+        super().showEvent(event)
+
+        if self._first_show:
+            center_window(self)
+            self._first_show = False
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+
+        global LAST_WINDOW_POS
+
+        if not self._first_show:
+            geo = self.frameGeometry()
+            LAST_WINDOW_POS = geo.center()  # 👉 сохраняем центр
+
+class BaseWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self._first_show = True
+
+    def showEvent(self, event):
+        super().showEvent(event)
+
+        if self._first_show:
+            center_window(self)
+            self._first_show = False
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+
+        global LAST_WINDOW_POS
+
+        if not self._first_show:
+            geo = self.frameGeometry()
+            LAST_WINDOW_POS = geo.center()  # 👉 сохраняем центр
+
+class MainWindow(BaseWindow):
     def __init__(self):
         super().__init__()
         uic.loadUi("gui/main.ui", self)
+        center_window(self)
 
         # подключаем кнопку
         self.btn_start.clicked.connect(self.open_firm_window)
         self.btn_exit.clicked.connect(self.close)
 
         self.path  = self.text_db.text().strip()
+
+        self.setFixedSize(self.size())
 
     def open_firm_window(self):
         self.firm_window = FirmWindow(self.path)
@@ -33,7 +107,7 @@ class MainWindow(QMainWindow):
         self.close()  # закрываем текущее окно
 
 
-class Edit_Firm(QWidget):
+class Edit_Firm(BaseWidget):
 
     firm_edit = pyqtSignal()
 
@@ -41,6 +115,7 @@ class Edit_Firm(QWidget):
     def __init__(self, db, id):
         super().__init__()
         uic.loadUi("gui/edit_firm.ui", self)
+        center_window(self)
 
         self.id = id
 
@@ -54,6 +129,8 @@ class Edit_Firm(QWidget):
         self.btn_edit_firm.clicked.connect(self.edit_firm)
 
         self.btn_exit_edit_firm.clicked.connect(self.close)
+
+        self.setFixedSize(self.size())
 
 
     def edit_firm(self):
@@ -81,7 +158,7 @@ class Edit_Firm(QWidget):
             )
 
 
-class Add_Cheks(QWidget):
+class Add_Cheks(BaseWidget):
 
     checks_add = pyqtSignal()
 
@@ -89,6 +166,7 @@ class Add_Cheks(QWidget):
     def __init__(self, db, firm_id):
         super().__init__()
         uic.loadUi("gui/create_checks.ui", self)
+        center_window(self)
 
         self.db = db
 
@@ -102,6 +180,8 @@ class Add_Cheks(QWidget):
         self.btn_checks_create.clicked.connect(self.add)
 
         self.btn_checks_back.clicked.connect(self.close)
+
+        self.setFixedSize(self.size())
 
 
     def add(self):
@@ -122,7 +202,7 @@ class Add_Cheks(QWidget):
         self.checks_add.emit()
         self.close()
 
-class Edit_Checks(QWidget):
+class Edit_Checks(BaseWidget):
 
     check_edit = pyqtSignal()
 
@@ -130,6 +210,7 @@ class Edit_Checks(QWidget):
     def __init__(self, db, check_id):
         super().__init__()
         uic.loadUi("gui/edit_checks.ui", self)
+        center_window(self)
 
         self.db = db
 
@@ -153,6 +234,8 @@ class Edit_Checks(QWidget):
         # подключаем кнопку
         self.btn_checks_create_edit.clicked.connect(self.edit)
 
+        self.setFixedSize(self.size())
+
 
     def edit(self):
 
@@ -164,7 +247,7 @@ class Edit_Checks(QWidget):
             QMessageBox.warning(
                 self,
                 "Ошибка",
-                "Не все поля заполнены"
+                "Не все поля заполнены!"
             )
             return
 
@@ -173,11 +256,12 @@ class Edit_Checks(QWidget):
         self.close()
 
 
-class ResultWindow(QMainWindow):
+class ResultWindow(BaseWindow):
 
     def __init__(self, db, firm_id, check_id, acc_id):
         super().__init__()
         uic.loadUi("gui/results.ui", self)
+        center_window(self)
 
         self.db = db
 
@@ -200,6 +284,8 @@ class ResultWindow(QMainWindow):
         self.btn_calc_result.clicked.connect(self.calc_result)
 
         self.btn_save_xmls.clicked.connect(self.save_excel)
+
+        self.setFixedSize(self.size())
 
     def calc_result(self):
 
@@ -228,34 +314,20 @@ class ResultWindow(QMainWindow):
             self.export_to_excel(path)
 
     def export_to_excel(self, path):
-        import pandas as pd
-        from openpyxl import load_workbook
+
 
         # --- 1. параметры
-        params = pd.DataFrame({
-            "Показатель": [
-                "PM",
-                "n",
-                "h",
-                "Покрытие (%)",
-                "Итого",
-                "High Value",
-                "MUS",
-                "Test Sum",
-                "Сообщения"
-            ],
-            "Значение": [
-                self.PM,
-                self.n,
-                self.h,
-                round(self.coverage, 2),
-                self.total,
-                self.high_value_sum,
-                self.mus_sum,
-                self.test_sum,
-                self.messages
-            ]
-        })
+        params = [
+            ("PM", self.PM),
+            ("n", self.n),
+            ("h", self.h),
+            ("Покрытие (%)", round(self.coverage, 2)),
+            ("Итого", self.total),
+            ("High Value", self.high_value_sum),
+            ("MUS", self.mus_sum),
+            ("Test Sum", self.test_sum),
+            ("Сообщения", self.messages)
+        ]
 
         # --- 2. выборка
         df = self.df.copy()
@@ -267,31 +339,75 @@ class ResultWindow(QMainWindow):
             "Причина"
         ]
 
-        # --- 3. запись
+        # --- 3. запись через pandas
         with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            df.to_excel(writer, sheet_name="MUS", index=False, startrow=12)
 
-            params_title = pd.DataFrame({
-                "Показатель": ["Результаты MUS выборки"],
-                "Значение": [""]
-            })
-
-            params_title.to_excel(writer, sheet_name="MUS", index=False, startrow=0)
-            params.to_excel(writer, sheet_name="MUS", index=False, startrow=2)
-            df.to_excel(writer, sheet_name="MUS", index=False, startrow=len(params) + 4)
-
-        # --- 4. автоширина
+        # --- 4. открываем для форматирования
         wb = load_workbook(path)
         ws = wb["MUS"]
 
+        # --- 🎯 Стили
+        bold = Font(bold=True, size=12)
+        header_font = Font(bold=True)
+        center = Alignment(vertical="center")
+        wrap = Alignment(wrap_text=True, vertical="top")
+
+        fill_high = PatternFill("solid", fgColor="C6EFCE")  # зелёный
+        fill_mus = PatternFill("solid", fgColor="FFF2CC")  # жёлтый
+
+        # --- 5. Заголовок
+        ws["A1"] = "Результаты MUS выборки"
+        ws["A1"].font = Font(bold=True, size=14)
+
+        # --- 6. Параметры
+        row = 3
+        for name, value in params:
+            ws[f"A{row}"] = name
+            ws[f"B{row}"] = value
+            ws[f"A{row}"].font = bold
+            row += 1
+
+        # --- 7. Шапка таблицы
+        header_row = 13
+
+        for col in range(1, ws.max_column + 1):
+            cell = ws.cell(row=header_row, column=col)
+            cell.font = header_font
+            cell.alignment = center
+
+        # --- 8. Подсветка строк
+        for row in range(header_row + 1, ws.max_row + 1):
+            reason = ws.cell(row=row, column=5).value  # "Причина"
+
+            if reason == "HIGH_VALUE":
+                for col in range(1, ws.max_column + 1):
+                    ws.cell(row=row, column=col).fill = fill_high
+
+            elif reason == "MUS":
+                for col in range(1, ws.max_column + 1):
+                    ws.cell(row=row, column=col).fill = fill_mus
+
+        # --- 9. Перенос текста (примечание)
+        for row in range(header_row + 1, ws.max_row + 1):
+            ws.cell(row=row, column=3).alignment = wrap  # Примечание
+
+        # --- 10. Автоширина колонок
         for col in ws.columns:
             max_length = 0
-            col_letter = col[0].column_letter
+            col_letter = get_column_letter(col[0].column)
 
             for cell in col:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
 
-            ws.column_dimensions[col_letter].width = max_length + 2
+            ws.column_dimensions[col_letter].width = min(max_length + 2, 50)
+
+        # --- 11. Закрепляем шапку
+        ws.freeze_panes = "A14"
+
+        # --- 12. Фильтр
+        ws.auto_filter.ref = f"A{header_row}:E{ws.max_row}"
 
         wb.save(path)
 
@@ -326,6 +442,12 @@ class ResultWindow(QMainWindow):
                 "Сумма",
                 "Причина"
             ])
+
+            self.table_results.setColumnWidth(0, 150)
+            self.table_results.setColumnWidth(1, 150)
+            self.table_results.setColumnWidth(2, 300)
+            self.table_results.setColumnWidth(3, 150)
+            self.table_results.setColumnWidth(4, 150)
 
             # заполнение
             for row_idx in range(self.df.shape[0]):
@@ -368,12 +490,13 @@ class ResultWindow(QMainWindow):
             layout3.addRow("Сообщение:", msg_label)
 
 
-class DataWindow(QMainWindow):
+class DataWindow(BaseWindow):
 
 
     def __init__(self, db, firm_id,check_id, acc_id):
         super().__init__()
         uic.loadUi("gui/data.ui", self)
+        center_window(self)
 
         self.db = db
 
@@ -392,6 +515,8 @@ class DataWindow(QMainWindow):
         self.btn_raw_entity.clicked.connect(self.open_entity)
 
         self.btn_result.clicked.connect(self.open_result)
+
+        self.setFixedSize(self.size())
 
     def open_result(self):
         self.close()
@@ -413,11 +538,12 @@ class DataWindow(QMainWindow):
         self.open_entity_win.show()
 
 
-class RawData(QMainWindow):
+class RawData(BaseWindow):
 
     def __init__(self, db, firm_id, check_id, acc_id, db_raw):
         super().__init__()
         uic.loadUi("gui/raw.ui", self)
+        center_window(self)
 
         self.db = db
         self.firm_id = firm_id
@@ -439,6 +565,8 @@ class RawData(QMainWindow):
         self.btn_raw_new_entity.clicked.connect(self.add_new_entity)
 
         self.btn_raw_preview.clicked.connect(self.apply_preview)
+
+        self.setFixedSize(self.size())
 
     def add_new_entity(self):
 
@@ -482,7 +610,8 @@ class RawData(QMainWindow):
             for col in range(table.columnCount()):
                 item = table.item(row, col)
                 if item:
-                    item.setBackground(QColor(255, 255, 255))
+                    item.setBackground(QBrush())  # ✅ сброс
+                    item.setForeground(QBrush())  # (если вдруг тоже менял)
 
     def apply_preview(self):
 
@@ -543,6 +672,7 @@ class RawData(QMainWindow):
 
     def load_preview_table(self, df):
 
+        df = df.replace({np.nan: ""})
         self.head= df.head(30)
 
         self.table_raw_start.setRowCount(self.head.shape[0])
@@ -606,17 +736,20 @@ class RawData(QMainWindow):
 
         note_cols = cols_map.get("note", [])
 
+        # 👉 цвет текста для тёмной темы
+        text_color = QColor(220, 220, 220)
+
         for row_idx in range(df_part.shape[0]):
             real_row = df_part.iloc[row_idx, 0]
 
             if not (first_row <= real_row <= last_row):
                 continue
 
-            # doc/date/amount (по ИМЕНАМ!)
+            # --- doc/date/amount
             for key, color in [
-                ("doc", QColor(200, 255, 200)),
-                ("date", QColor(255, 255, 200)),
-                ("amount", QColor(255, 230, 180)),
+                ("doc", QColor(80, 120, 80)),  # более тёмные цвета
+                ("date", QColor(120, 120, 60)),
+                ("amount", QColor(140, 100, 60)),
             ]:
                 col_name = cols_map.get(key)
 
@@ -625,22 +758,25 @@ class RawData(QMainWindow):
 
                     item = table.item(row_idx, col_idx)
                     if item:
-                        item.setBackground(color)
+                        item.setBackground(QBrush(color))
+                        item.setForeground(QBrush(text_color))  # 👈 фикс
 
-            # note
+            # --- note
             for col_name in note_cols:
                 if col_name in col_positions:
                     col_idx = col_positions[col_name]
 
                     item = table.item(row_idx, col_idx)
                     if item:
-                        item.setBackground(QColor(230, 200, 255))
+                        item.setBackground(QBrush(QColor(100, 80, 140)))
+                        item.setForeground(QBrush(text_color))  # 👈 фикс
 
-class EntityWindow(QMainWindow):
+class EntityWindow(BaseWindow):
 
     def __init__(self, db, firm_id, check_id, acc_id):
         super().__init__()
         uic.loadUi("gui/entity.ui", self)
+        center_window(self)
 
         self.db = db
 
@@ -661,6 +797,8 @@ class EntityWindow(QMainWindow):
         self.btn_entity_exit_to_data.clicked.connect(self.open_data)
 
         self.btn_entity_new_file.clicked.connect(self.load_file)
+
+        self.setFixedSize(self.size())
 
 
     def load_file(self):
@@ -743,13 +881,14 @@ class EntityWindow(QMainWindow):
 
 
 
-class Edit_Acc(QWidget):
+class Edit_Acc(BaseWidget):
 
     edit_acc = pyqtSignal()
 
     def __init__(self, db, acc_id):
         super().__init__()
         uic.loadUi("gui/edit_acc.ui", self)
+        center_window(self)
 
         self.db = db
 
@@ -763,6 +902,8 @@ class Edit_Acc(QWidget):
         self.btn_account_edit.clicked.connect(self.edit_account)
 
         self.btn_account_edit_exit.clicked.connect(self.close)
+
+        self.setFixedSize(self.size())
 
 
     def edit_account(self):
@@ -781,13 +922,14 @@ class Edit_Acc(QWidget):
         self.edit_acc.emit()
         self.close()
 
-class Create_acc(QMainWindow):
+class Create_acc(BaseWindow):
 
     acc_added = pyqtSignal()
 
     def __init__(self, db, firm_id, check_id):
         super().__init__()
         uic.loadUi("gui/create_acc.ui", self)
+        center_window(self)
 
         self.db = db
         self.firm_id = firm_id
@@ -799,6 +941,8 @@ class Create_acc(QMainWindow):
         self.btn_account_create_back_checks.clicked.connect(self.back_account)
 
         self.open_checks = AccountWindow(self.db, self.firm_id, check_id)
+
+        self.setFixedSize(self.size())
 
     def back_account(self):
 
@@ -829,11 +973,12 @@ class Create_acc(QMainWindow):
             )
 
 
-class AccountWindow(QMainWindow):
+class AccountWindow(BaseWindow):
 
     def __init__(self, db, firm_id, check_id):
         super().__init__()
         uic.loadUi("gui/account.ui", self)
+        center_window(self)
 
         self.db = db
         self.firm_id = firm_id
@@ -858,6 +1003,8 @@ class AccountWindow(QMainWindow):
         self.table_accounts.cellDoubleClicked.connect(self.open_data)
 
         self.btn_accounts_exit_to_checks.clicked.connect(self.open_checks)
+
+        self.setFixedSize(self.size())
 
 
     def open_create_account(self):
@@ -909,7 +1056,7 @@ class AccountWindow(QMainWindow):
         accounts = self.db.get_accounts(self.check_id)
 
         self.table_accounts.setRowCount(len(accounts))
-        self.table_accounts.setColumnCount(6)
+        self.table_accounts.setColumnCount(4)
 
         self.table_accounts.setHorizontalHeaderLabels([
             "", "Название", "", ""
@@ -957,11 +1104,12 @@ class AccountWindow(QMainWindow):
             QTableWidget.EditTrigger.NoEditTriggers
         )
 
-class CheckWindow(QMainWindow):
+class CheckWindow(BaseWindow):
 
     def __init__(self, db, firm_id):
         super().__init__()
         uic.loadUi("gui/checks.ui", self)
+        center_window(self)
 
         self.db = db
         self.firm_id = firm_id
@@ -979,6 +1127,8 @@ class CheckWindow(QMainWindow):
         self.table_checks.cellDoubleClicked.connect(self.open_account)
 
         self.btn_checks_exit_to_firm.clicked.connect(self.open_firm)
+
+        self.setFixedSize(self.size())
 
 
     def open_account(self, row, column):
@@ -1094,13 +1244,14 @@ class CheckWindow(QMainWindow):
 
 
 
-class Create_Firm(QMainWindow):
+class Create_Firm(BaseWindow):
 
     firm_added = pyqtSignal()
 
     def __init__(self, db):
         super().__init__()
         uic.loadUi("gui/create_firm.ui", self)
+        center_window(self)
 
         self.db = db
         # подключаем кнопку
@@ -1108,7 +1259,7 @@ class Create_Firm(QMainWindow):
 
         self.btn_exit_create_firm.clicked.connect(self.close)
 
-
+        self.setFixedSize(self.size())
 
     def create_firm(self):
         new_firm = self.text_new_firm.text().strip()
@@ -1135,10 +1286,11 @@ class Create_Firm(QMainWindow):
 
 
 
-class FirmWindow(QMainWindow):
+class FirmWindow(BaseWindow):
     def __init__(self, path="audit.db", db=None):
         super().__init__()
         uic.loadUi("gui/firm.ui", self)
+        center_window(self)
 
         if db:
             self.db = db
@@ -1159,6 +1311,8 @@ class FirmWindow(QMainWindow):
         # реакция на ввод
         self.text_search_firm.textChanged.connect(self.on_search_text_changed)
         self.btn_search_reset.clicked.connect(self.reset_search)
+
+        self.setFixedSize(self.size())
 
 
     def reset_search(self):
@@ -1274,6 +1428,8 @@ class FirmWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    app.setStyleSheet(qdarkstyle.load_stylesheet())
 
     window = MainWindow()
     window.show()
