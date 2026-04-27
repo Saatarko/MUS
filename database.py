@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 import duckdb
@@ -6,12 +7,11 @@ import random
 from datetime import datetime
 
 import pandas as pd
-from PyQt6.QtWidgets import QTableWidgetItem, QPushButton
-from sympy import false
+
 
 
 class Database:
-    def __init__(self, path="audit.db"):
+    def __init__(self, path= os.path.join(os.getcwd(), "audit.db")):
         self.conn = duckdb.connect(path)
 
     # ---------------------------

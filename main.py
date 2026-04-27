@@ -26,6 +26,12 @@ import qdarkstyle
 style = QApplication.style()
 LAST_WINDOW_POS = None
 
+def resource_path(relative_path):
+    import sys, os
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 def center_window(window):
     global LAST_WINDOW_POS
 
@@ -89,7 +95,8 @@ class BaseWidget(QWidget):
 class MainWindow(BaseWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi("gui/main.ui", self)
+        uic.loadUi(resource_path("gui/main.ui"), self)
+        # uic.loadUi("gui/main.ui", self)
         center_window(self)
 
         # подключаем кнопку
@@ -114,7 +121,7 @@ class Edit_Firm(BaseWidget):
 
     def __init__(self, db, id):
         super().__init__()
-        uic.loadUi("gui/edit_firm.ui", self)
+        uic.loadUi(resource_path("gui/edit_firm.ui"), self)
         center_window(self)
 
         self.id = id
@@ -165,7 +172,7 @@ class Add_Cheks(BaseWidget):
 
     def __init__(self, db, firm_id):
         super().__init__()
-        uic.loadUi("gui/create_checks.ui", self)
+        uic.loadUi(resource_path("gui/create_checks.ui"), self)
         center_window(self)
 
         self.db = db
@@ -209,7 +216,7 @@ class Edit_Checks(BaseWidget):
 
     def __init__(self, db, check_id):
         super().__init__()
-        uic.loadUi("gui/edit_checks.ui", self)
+        uic.loadUi(resource_path("gui/edit_checks.ui"), self)
         center_window(self)
 
         self.db = db
@@ -260,7 +267,7 @@ class ResultWindow(BaseWindow):
 
     def __init__(self, db, firm_id, check_id, acc_id):
         super().__init__()
-        uic.loadUi("gui/results.ui", self)
+        uic.loadUi(resource_path("gui/results.ui"), self)
         center_window(self)
 
         self.db = db
@@ -304,12 +311,12 @@ class ResultWindow(BaseWindow):
             self,
             "Сохранить файл",
             "",
-            "Excel Files (*.xlsx)"
+            "Excel Files (*.xls)"
         )
 
         if path:
-            if not path.endswith(".xlsx"):
-                path += ".xlsx"
+            if not path.endswith(".xls"):
+                path += ".xls"
 
             self.export_to_excel(path)
 
@@ -474,14 +481,15 @@ class ResultWindow(BaseWindow):
             while layout3.rowCount():
                 layout3.removeRow(0)
 
-            layout1.addRow("PM:", QLabel(str(self.PM)))
-            layout1.addRow("n:", QLabel(str(self.n)))
-            layout1.addRow("h:", QLabel(str(self.h)))
+            layout1.addRow("PM:", QLabel(f"{self.PM:.2f}"))
+            layout1.addRow("n:", QLabel(f"{self.n:,.2f}"))
+            layout1.addRow("h:", QLabel(f"{self.h:,.2f}"))
             layout1.addRow("Покрытие:", QLabel(f"{self.coverage:.2%}"))
-            layout2.addRow("Итого:", QLabel(str(self.total)))
-            layout2.addRow("Наибольшая сумма:", QLabel(str(self.high_value_sum)))
-            layout2.addRow("MUS сумма:", QLabel(str(self.mus_sum)))
-            layout2.addRow("Тестовая сумма:", QLabel(str(self.test_sum)))
+
+            layout2.addRow("Итого:", QLabel(f"{self.total:,.2f}"))
+            layout2.addRow("Наибольшая сумма:", QLabel(f"{self.high_value_sum:,.2f}"))
+            layout2.addRow("MUS сумма:", QLabel(f"{self.mus_sum:,.2f}"))
+            layout2.addRow("Тестовая сумма:", QLabel(f"{self.test_sum:,.2f}"))
 
             msg_label = QLabel("".join(self.messages))
             msg_label.setWordWrap(True)
@@ -495,7 +503,7 @@ class DataWindow(BaseWindow):
 
     def __init__(self, db, firm_id,check_id, acc_id):
         super().__init__()
-        uic.loadUi("gui/data.ui", self)
+        uic.loadUi(resource_path("gui/data.ui"), self)
         center_window(self)
 
         self.db = db
@@ -542,7 +550,7 @@ class RawData(BaseWindow):
 
     def __init__(self, db, firm_id, check_id, acc_id, db_raw):
         super().__init__()
-        uic.loadUi("gui/raw.ui", self)
+        uic.loadUi(resource_path("gui/raw.ui"), self)
         center_window(self)
 
         self.db = db
@@ -775,7 +783,7 @@ class EntityWindow(BaseWindow):
 
     def __init__(self, db, firm_id, check_id, acc_id):
         super().__init__()
-        uic.loadUi("gui/entity.ui", self)
+        uic.loadUi(resource_path("gui/entity.ui"), self)
         center_window(self)
 
         self.db = db
@@ -887,7 +895,7 @@ class Edit_Acc(BaseWidget):
 
     def __init__(self, db, acc_id):
         super().__init__()
-        uic.loadUi("gui/edit_acc.ui", self)
+        uic.loadUi(resource_path("gui/edit_acc.ui"), self)
         center_window(self)
 
         self.db = db
@@ -928,7 +936,7 @@ class Create_acc(BaseWindow):
 
     def __init__(self, db, firm_id, check_id):
         super().__init__()
-        uic.loadUi("gui/create_acc.ui", self)
+        uic.loadUi(resource_path("gui/create_acc.ui"), self)
         center_window(self)
 
         self.db = db
@@ -977,7 +985,7 @@ class AccountWindow(BaseWindow):
 
     def __init__(self, db, firm_id, check_id):
         super().__init__()
-        uic.loadUi("gui/account.ui", self)
+        uic.loadUi(resource_path("gui/account.ui"), self)
         center_window(self)
 
         self.db = db
@@ -1080,11 +1088,11 @@ class AccountWindow(BaseWindow):
             )
 
             btn_account_edit = QPushButton()
-            btn_account_edit.setIcon(QIcon("gui/icons/edit.png"))
+            btn_account_edit.setIcon(QIcon(resource_path("gui/icons/edit.png")))
             btn_account_edit.clicked.connect(lambda _, fid=id: self.edit_account(fid))
 
             btn_account_del = QPushButton()
-            btn_account_del.setIcon(QIcon("gui/icons/trash.png"))
+            btn_account_del.setIcon(QIcon(resource_path("gui/icons/trash.png")))
             btn_account_del.clicked.connect(lambda _, fid=id: self.delete_acc(fid))
 
             btn_account_edit.setFixedSize(30, 30)
@@ -1108,7 +1116,7 @@ class CheckWindow(BaseWindow):
 
     def __init__(self, db, firm_id):
         super().__init__()
-        uic.loadUi("gui/checks.ui", self)
+        uic.loadUi(resource_path("gui/checks.ui"), self)
         center_window(self)
 
         self.db = db
@@ -1218,11 +1226,11 @@ class CheckWindow(BaseWindow):
 
 
             btn_checks_edit = QPushButton()
-            btn_checks_edit.setIcon(QIcon("gui/icons/edit.png"))
+            btn_checks_edit.setIcon(QIcon(resource_path("gui/icons/edit.png")))
             btn_checks_edit.clicked.connect(lambda _, fid=id: self.edit_checks(fid))
 
             btn_checks_del = QPushButton()
-            btn_checks_del.setIcon(QIcon("gui/icons/trash.png"))
+            btn_checks_del.setIcon(QIcon(resource_path("gui/icons/trash.png")))
             btn_checks_del.clicked.connect(lambda _, fid=id: self.delete_cheks(fid))
 
             btn_checks_edit.setFixedSize(30, 30)
@@ -1250,7 +1258,7 @@ class Create_Firm(BaseWindow):
 
     def __init__(self, db):
         super().__init__()
-        uic.loadUi("gui/create_firm.ui", self)
+        uic.loadUi(resource_path("gui/create_firm.ui"), self)
         center_window(self)
 
         self.db = db
@@ -1289,7 +1297,7 @@ class Create_Firm(BaseWindow):
 class FirmWindow(BaseWindow):
     def __init__(self, path="audit.db", db=None):
         super().__init__()
-        uic.loadUi("gui/firm.ui", self)
+        uic.loadUi(resource_path("gui/firm.ui"), self)
         center_window(self)
 
         if db:
@@ -1360,11 +1368,12 @@ class FirmWindow(BaseWindow):
 
 
             btn_edit = QPushButton()
-            btn_edit.setIcon(QIcon("gui/icons/edit.png"))
+            btn_edit.setIcon(QIcon(resource_path("gui/icons/edit.png")))
+
             btn_edit.clicked.connect(lambda _, fid=firm_id: self.edit_firm(fid))
 
             btn_del = QPushButton()
-            btn_del.setIcon(QIcon("gui/icons/trash.png"))
+            btn_del.setIcon(QIcon(resource_path("gui/icons/trash.png")))
             btn_del.clicked.connect(lambda _, fid=firm_id: self.delete_firm(fid))
 
             btn_edit.setFixedSize(30, 30)

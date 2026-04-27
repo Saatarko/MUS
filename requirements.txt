@@ -1,0 +1,7 @@
+PyQt6==6.11.0
+PyQt6_sip==13.9.1
+pandas==2.2.3
+numpy==1.26.4
+openpyxl==3.1.5
+duckdb==1.5.2
+QDarkStyle==3.2.3
