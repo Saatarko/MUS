@@ -4,6 +4,7 @@ from pathlib import Path
 from collections import Counter
 from collections import Counter
 import pandas as pd
+import xlrd
 
 
 def normalize_1c_table(
@@ -138,6 +139,7 @@ def normalize_1c_table(
                         f"{list(filled_columns)}, "
                         f"{similarity:.1%} → NEW"
                     )
+
 
             current = row.copy()
             continue
@@ -389,12 +391,21 @@ def pre_parser(file_path: str, sheet_name=0):
         )
 
     elif ext == ".xls":
-        df_raw = pd.read_excel(
+
+        book = xlrd.open_workbook(
             file_path,
-            header=None,
-            sheet_name=sheet_name,
-            engine="xlrd"
+            encoding_override="cp1251"
         )
+
+        sheet = book.sheet_by_index(sheet_name)
+
+        data = [
+            [sheet.cell_value(row, col) for col in range(sheet.ncols)]
+            for row in range(sheet.nrows)
+        ]
+
+        df_raw = pd.DataFrame(data)
+
 
     elif ext == ".csv":
         df_raw = pd.read_csv(

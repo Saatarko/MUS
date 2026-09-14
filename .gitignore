@@ -207,3 +207,12 @@ marimo/_lsp/
 __marimo__/
 .idea/
 Parser/data
+*.xls
+*.ods
+*.xlsx
+*.xls#
+*.db
+temp
+audit.db.wal
+Parser/test.ipynb
+Parser/tests.py

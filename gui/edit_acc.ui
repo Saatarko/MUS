@@ -48,17 +48,7 @@
     </font>
    </property>
    <property name="text">
-    <string>Новое название счета</string>
-   </property>
-  </widget>
-  <widget class="QLineEdit" name="text_account_edit_name">
-   <property name="geometry">
-    <rect>
-     <x>40</x>
-     <y>80</y>
-     <width>401</width>
-     <height>31</height>
-    </rect>
+    <string>Выберите новый счет</string>
    </property>
   </widget>
   <widget class="QPushButton" name="btn_account_edit">
@@ -99,6 +89,16 @@
    </property>
    <property name="text">
     <string>Назад</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="acc_desc_list_edit">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>70</y>
+     <width>451</width>
+     <height>61</height>
+    </rect>
    </property>
   </widget>
  </widget>

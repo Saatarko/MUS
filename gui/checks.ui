@@ -39,7 +39,7 @@
      <rect>
       <x>30</x>
       <y>80</y>
-      <width>561</width>
+      <width>651</width>
       <height>581</height>
      </rect>
     </property>
@@ -80,9 +80,9 @@
    <widget class="QPushButton" name="btn_new_checks">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>710</x>
       <y>80</y>
-      <width>321</width>
+      <width>221</width>
       <height>41</height>
      </rect>
     </property>
@@ -98,9 +98,9 @@
    <widget class="QPushButton" name="btn_checks_exit_to_firm">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>710</x>
       <y>610</y>
-      <width>321</width>
+      <width>221</width>
       <height>41</height>
      </rect>
     </property>

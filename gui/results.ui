@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>951</width>
-    <height>704</height>
+    <height>711</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -81,7 +81,7 @@
     <property name="geometry">
      <rect>
       <x>730</x>
-      <y>620</y>
+      <y>630</y>
       <width>201</width>
       <height>31</height>
      </rect>
@@ -120,8 +120,8 @@
      <rect>
       <x>10</x>
       <y>530</y>
-      <width>211</width>
-      <height>121</height>
+      <width>221</width>
+      <height>131</height>
      </rect>
     </property>
     <layout class="QFormLayout" name="widget_results"/>
@@ -132,7 +132,7 @@
       <x>240</x>
       <y>530</y>
       <width>251</width>
-      <height>121</height>
+      <height>131</height>
      </rect>
     </property>
     <layout class="QFormLayout" name="widget_results_2"/>
@@ -143,7 +143,7 @@
       <x>500</x>
       <y>530</y>
       <width>221</width>
-      <height>121</height>
+      <height>131</height>
      </rect>
     </property>
     <layout class="QFormLayout" name="widget_results_3">
@@ -156,7 +156,7 @@
     <property name="geometry">
      <rect>
       <x>730</x>
-      <y>570</y>
+      <y>580</y>
       <width>201</width>
       <height>41</height>
      </rect>
