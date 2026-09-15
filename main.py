@@ -265,8 +265,8 @@ class Edit_Checks(BaseWidget):
             "проверка сплошным порядком",
         ]
 
-        self.Risk_create_check.addItems(risks)
-        self.Risk_create_check.setCurrentText(self.risk)
+        self.Risk_edit_check.addItems(risks)
+        self.Risk_edit_check.setCurrentText(self.risk)
 
         self.text_period_checks_edit.setText(self.period)
 
