@@ -285,7 +285,7 @@ class Edit_Checks(BaseWidget):
 
         materiality = self.spin_materiality_edit.value()
 
-        risk = self.Risk_create_check.currentText()
+        risk = self.Risk_edit_check.currentText()
 
         if not period or not materiality:
             QMessageBox.warning(
